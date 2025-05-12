@@ -1,0 +1,14 @@
+{
+    "name": "homedoudou-addon",
+    "version": "1.0.0",
+    "description": "Addon pour connecter Arduino à Home Assistant via WebSocket",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "ws": "^8.14.2",
+        "home-assistant-js-websocket": "^8.2.0",
+        "node-fetch": "^3.3.2"
+    }
+}
