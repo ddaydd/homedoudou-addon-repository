@@ -1,6 +1,6 @@
 name: "HomeDoudou"
 description: "Addon pour connecter Arduino à Home Assistant via WebSocket"
-version: "1.0.0"
+version: "1.0.1"
 slug: "homedoudou"
 init: false
 arch:

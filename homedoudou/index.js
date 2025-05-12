@@ -235,16 +235,16 @@ function sendCommandToArduino(ws, command) {
         console.log('Commande envoyée à Arduino:', command);
         return true;
     } else {
-        console.error('WebSocket non connecté, impossible d'envoyer la commande');
-    return false;
+        console.error('WebSocket non connecté, impossible d\'envoyer la commande');
+        return false;
     }
 }
 
 // Enregistrer les services personnalisés dans Home Assistant
 async function registerHomeAssistantServices() {
     if (!HA_TOKEN) {
-        console.error('Token Home Assistant non configuré, impossible d'enregistrer les services');
-    return;
+        console.error('Token Home Assistant non configuré, impossible d\'enregistrer les services');
+        return;
     }
 
     try {
@@ -293,8 +293,8 @@ async function registerHomeAssistantServices() {
 
         console.log('Service enregistré avec succès dans Home Assistant');
     } catch (err) {
-        console.error('Erreur lors de l'enregistrement du service: ', err);
-  }
+        console.error('Erreur lors de l\'enregistrement du service: ', err);
+    }
 }
 
 // Stocker les connexions WebSocket actives par identifiant d'appareil

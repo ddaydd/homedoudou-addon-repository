@@ -6,3 +6,7 @@
 - Support de la connexion WebSocket pour Arduino
 - Création automatique d'entités dans Home Assistant
 - API REST pour envoyer des commandes aux appareils Arduino
+
+## 1.0.1
+
+- corrige un bug de console.log avec apostrophe.
