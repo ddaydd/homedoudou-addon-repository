@@ -10,3 +10,7 @@
 ## 1.0.1
 
 - corrige un bug de console.log avec apostrophe.
+
+## 1.0.2
+
+- corrige l'exposition des ports 8080 et 3000

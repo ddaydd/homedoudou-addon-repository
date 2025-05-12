@@ -1,6 +1,6 @@
 name: "HomeDoudou"
 description: "Addon pour connecter Arduino à Home Assistant via WebSocket"
-version: "1.0.1"
+version: "1.0.2"
 slug: "homedoudou"
 init: false
 arch:
@@ -13,5 +13,13 @@ startup: application
 boot: auto
 options:
   websocket_port: 8080
+  http_port: 3000
 schema:
   websocket_port: port
+  http_port: port
+ports:
+  8080/tcp: 8080
+  3000/tcp: 3000
+ports_description:
+  8080/tcp: "Port pour le serveur WebSocket"
+  3000/tcp: "Port pour l'API REST"
