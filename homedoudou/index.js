@@ -6,7 +6,8 @@ const path = require('path');
 let options = {
     websocket_port: process.env.WS_PORT || 8080,
     http_port: process.env.HTTP_PORT || 3000,
-    ha_host: process.env.HA_HOST || 'http://localhost:8123'
+    ha_host: process.env.HA_HOST || 'http://localhost:8123',
+    ha_token: process.env.HA_TOKEN || ''
 };
 
 try {
@@ -75,7 +76,7 @@ async function updateHomeAssistantEntity(entityId, state, attributes = {}) {
     const response = await fetch(url, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Authorization': `Bearer ${options.ha_token}`,
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -110,22 +111,7 @@ const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fet
 
 // Configuration pour l'API Home Assistant
 const HA_HOST = process.env.SUPERVISOR_TOKEN ? 'http://supervisor/core' : options.ha_host;
-let HA_TOKEN = '';
-
-// Si l'addon s'exécute dans l'environnement Home Assistant, utiliser le token du superviseur
-if (process.env.SUPERVISOR_TOKEN) {
-    HA_TOKEN = process.env.SUPERVISOR_TOKEN;
-} else {
-    // Sinon, essayer de charger un token depuis la configuration
-    try {
-        const tokenPath = path.join('/data', 'token.txt');
-        if (fs.existsSync(tokenPath)) {
-            HA_TOKEN = fs.readFileSync(tokenPath, 'utf8').trim();
-        }
-    } catch (err) {
-        console.error('Erreur lors du chargement du token Home Assistant:', err);
-    }
-}
+let HA_TOKEN = process.env.SUPERVISOR_TOKEN || options.ha_token;
 
 // Fonction pour mettre à jour une entité dans Home Assistant
 async function updateHomeAssistantEntity(entityId, state, attributes = {}) {

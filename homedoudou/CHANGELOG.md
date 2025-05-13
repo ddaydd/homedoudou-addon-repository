@@ -19,3 +19,7 @@
 
 - meilleure configuration
 - debut de gestion des entitées
+
+## 1.0.4
+
+-- ajout de hassio_api

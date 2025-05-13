@@ -1,5 +1,6 @@
 {
     "websocket_port": 8080,
     "http_port": 3000,
-    "ha_host": "http://localhost:8123"
+    "ha_host": "http://localhost:8123",
+    "ha_token": ""
 }
