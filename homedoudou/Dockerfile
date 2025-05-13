@@ -12,5 +12,8 @@ COPY index.js .
 # Installation des dépendances
 RUN npm install
 
+# Copie de la configuration s6-overlay
+COPY rootfs /
+
 # Configuration pour l'exécution
-CMD [ "node", "index.js" ]
+CMD ["/init"]
