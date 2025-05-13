@@ -27,3 +27,7 @@
 ## 1.0.5
 
 -- fix la creation d'entitées
+
+## 1.0.6
+
+-- juste un debug
