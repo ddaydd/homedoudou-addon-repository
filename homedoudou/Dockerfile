@@ -10,11 +10,8 @@ COPY package.json .
 COPY index.js .
 RUN npm install
 
-# Copie de la configuration s6-overlay
-COPY rootfs /
+# Copy data for add-on
+COPY run.sh /
+RUN chmod a+x /run.sh
 
-# S'assurer que /init est exécutable
-RUN chmod +x /init
-
-# Utiliser s6-overlay
-CMD ["/init"]
+CMD [ "/run.sh" ]
