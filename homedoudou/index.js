@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 const hbs = require('hbs');
+const express = require('express');
 const cors = require('cors'); // Pour gérer le CORS
 const app = express();
 
