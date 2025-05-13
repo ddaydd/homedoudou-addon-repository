@@ -1,5 +1,0 @@
-{
-    "websocket_port": 8080,
-    "http_port": 3000,
-    "ha_host": "http://homeassistant:8123"
-}

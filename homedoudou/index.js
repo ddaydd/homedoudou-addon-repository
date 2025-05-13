@@ -29,26 +29,6 @@ let options = {
 // Détection du mode add-on
 const isAddon = !!process.env.SUPERVISOR_TOKEN;
 
-// Charger la configuration depuis options.json si disponible
-try {
-    const dataDir = path.join(__dirname, 'data');
-    if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir);
-    }
-
-    const configPath = path.join(dataDir, 'options.json');
-    if (fs.existsSync(configPath)) {
-        const fileOptions = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        options = { ...options, ...fileOptions };
-        console.log('Configuration chargée depuis options.json');
-    } else {
-        fs.writeFileSync(configPath, JSON.stringify(options, null, 4));
-        console.log('Fichier options.json créé avec les valeurs par défaut');
-    }
-} catch (err) {
-    console.error('Erreur lors du chargement de la configuration:', err);
-}
-
 const HA_CONFIG = {
     // En mode add-on, utilisez l'API supervisor, sinon utilisez l'hôte configuré
     host: isAddon ? 'http://supervisor/core' : options.ha_host,
