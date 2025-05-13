@@ -6,12 +6,15 @@ const path = require('path');
 let options = {
     websocket_port: process.env.WS_PORT || 8080,
     http_port: process.env.HTTP_PORT || 3000,
-    ha_host: process.env.HA_HOST || 'http://localhost:8123',
+    ha_host: process.env.HA_HOST || 'http://homeassistant:8123',
     ha_token: process.env.HA_TOKEN || ''
 };
 
+// Détection du mode add-on
+const isAddon = !!process.env.SUPERVISOR_TOKEN;
+
+// Charger la configuration depuis options.json si disponible
 try {
-    // Créer le dossier data s'il n'existe pas
     const dataDir = path.join(__dirname, 'data');
     if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir);
@@ -21,13 +24,25 @@ try {
     if (fs.existsSync(configPath)) {
         const fileOptions = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         options = { ...options, ...fileOptions };
+        console.log('Configuration chargée depuis options.json');
     } else {
-        // Créer le fichier options.json avec les valeurs par défaut
         fs.writeFileSync(configPath, JSON.stringify(options, null, 4));
+        console.log('Fichier options.json créé avec les valeurs par défaut');
     }
 } catch (err) {
     console.error('Erreur lors du chargement de la configuration:', err);
 }
+
+const HA_CONFIG = {
+    // En mode add-on, utilisez l'API supervisor, sinon utilisez l'hôte configuré
+    host: isAddon ? 'http://supervisor/core' : options.ha_host,
+    // Priorité au token supervisor s'il existe
+    token: process.env.SUPERVISOR_TOKEN || options.ha_token
+};
+
+// Log de la configuration (sans afficher le token pour des raisons de sécurité)
+console.log(`Configuration Home Assistant: host=${HA_CONFIG.host}, token=${HA_CONFIG.token ? '[PRÉSENT]' : '[MANQUANT]'}`);
+console.log(`Mode d'exécution: ${isAddon ? 'Add-on Home Assistant' : 'Standalone'}`);
 
 // Création du serveur WebSocket
 const wss = new WebSocket.Server({ port: options.websocket_port });
@@ -68,30 +83,35 @@ wss.on('connection', (ws) => {
 
 // Fonction pour mettre à jour une entité dans Home Assistant
 async function updateHomeAssistantEntity(entityId, state, attributes = {}) {
-    // Cette fonction sera implémentée pour communiquer avec l'API Home Assistant
-    console.log(`Mise à jour de l'entité ${entityId} avec l'état ${state}`);
-
-    // TODO: Implémenter la communication avec l'API Home Assistant
-    const url = `${options.ha_host}/api/states/${entityId}`;
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${options.ha_token}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            state: state,
-            attributes: attributes
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+    if (!HA_CONFIG.token) {
+        console.error('Token Home Assistant non configuré');
+        return;
     }
 
-    const data = await response.json();
-    console.log(`Entité ${entityId} mise à jour avec succès:`, data);
-    return data;
+    try {
+        const url = `${HA_CONFIG.host}/api/states/${entityId}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${HA_CONFIG.token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                state: state,
+                attributes: attributes
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log(`Entité ${entityId} mise à jour avec succès`);
+        return data;
+    } catch (err) {
+        console.error(`Erreur lors de la mise à jour de l'entité ${entityId}:`, err);
+    }
 }
 
 // Gestion de l'arrêt propre
@@ -148,11 +168,23 @@ async function updateHomeAssistantEntity(entityId, state, attributes = {}) {
 
 // Fonction pour créer automatiquement des entités pour les capteurs Arduino
 async function createSensorEntity(sensorId, friendlyName, deviceClass, unitOfMeasurement) {
+    if (!HA_CONFIG.token) {
+        console.error('Token Home Assistant non configuré');
+        return;
+    }
+
     // Vérifier si l'entité existe déjà
     try {
-        const response = await fetch(`${HA_HOST}/api/states/sensor.${sensorId}`, {
+        console.log(`Vérification de l'entité sensor.${sensorId} sur ${HA_CONFIG.host}`);
+
+        const url = `${HA_CONFIG.host}/api/states/sensor.${sensorId}`;
+        console.log(`URL de vérification: ${url}`);
+
+        const response = await fetch(url, {
+            method: 'GET',
             headers: {
-                'Authorization': `Bearer ${HA_TOKEN}`,
+                'Authorization': `Bearer ${HA_CONFIG.token}`,
+                'Content-Type': 'application/json',
             }
         });
 
@@ -167,9 +199,16 @@ async function createSensorEntity(sensorId, friendlyName, deviceClass, unitOfMea
                 unit_of_measurement: unitOfMeasurement,
                 state_class: 'measurement'
             });
+        } else {
+            console.log(`L'entité sensor.${sensorId} existe déjà`);
         }
     } catch (err) {
         console.error(`Erreur lors de la vérification/création de l'entité ${sensorId}:`, err);
+        // Afficher plus de détails sur l'erreur
+        if (err.code === 'ECONNREFUSED') {
+            console.error(`Connexion refusée à ${HA_CONFIG.host}. Vérifiez que Home Assistant est accessible.`);
+            console.error(`Si vous êtes en mode add-on, vérifiez que l'add-on a accès à l'API Home Assistant.`);
+        }
     }
 }
 
@@ -246,7 +285,7 @@ function sendCommandToArduino(ws, command) {
 
 // Enregistrer les services personnalisés dans Home Assistant
 async function registerHomeAssistantServices() {
-    if (!HA_TOKEN) {
+    if (!HA_CONFIG.token) {
         console.error('Token Home Assistant non configuré, impossible d\'enregistrer les services');
         return;
     }
@@ -281,11 +320,11 @@ async function registerHomeAssistantServices() {
             }
         };
 
-        const url = `${HA_HOST}/api/services/homedoudou/send_command`;
+        const url = `${HA_CONFIG.host}/api/services/homedoudou/send_command`;
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${HA_TOKEN}`,
+                'Authorization': `Bearer ${HA_CONFIG.token}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(serviceData)
@@ -415,6 +454,12 @@ const server = http.createServer((req, res) => {
         const devices = Array.from(activeConnections.keys());
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ devices }));
+    }
+    // Endpoint pour créer une entité
+    else if (req.method === 'POST' && req.url === '/api/create-entity') {
+        createSensorEntity('temperature', 'Temperature', 'temperature', '°C');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Entité créée' }));
     }
     // Endpoint pour le statut de l'addon
     else if (req.method === 'GET' && req.url === '/api/status') {

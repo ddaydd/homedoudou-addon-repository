@@ -23,3 +23,7 @@
 ## 1.0.4
 
 -- ajout de hassio_api
+
+## 1.0.5
+
+-- fix la creation d'entitées
