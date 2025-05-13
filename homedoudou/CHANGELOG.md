@@ -47,3 +47,7 @@
 ## 1.1.3
 
 --fix
+
+## 1.1.4
+
+-- fix dossier views 
