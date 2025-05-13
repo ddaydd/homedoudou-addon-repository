@@ -48,6 +48,6 @@
 
 --fix
 
-## 1.1.4 et 1.1.5 et 1.1.6
+## 1.1.4 et 1.1.5 et 1.1.6 et 1.1.7
 
 -- fix dossier views 

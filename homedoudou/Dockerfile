@@ -8,7 +8,7 @@ RUN apk add --no-cache nodejs npm
 WORKDIR /app
 COPY package.json .
 COPY index.js .
-COPY views/ .
+COPY views/ ./views/
 RUN npm install
 
 # Copy data for add-on
