@@ -1,19 +1,20 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
 FROM ${BUILD_FROM}
 
-# Installation de Node.js
+# Installation de Node.js et dépendances
 RUN apk add --no-cache nodejs npm
 
-# Copie des fichiers
+# Copie des fichiers de l'application
 WORKDIR /app
 COPY package.json .
 COPY index.js .
-
-# Installation des dépendances
 RUN npm install
 
 # Copie de la configuration s6-overlay
 COPY rootfs /
 
-# Configuration pour l'exécution
+# S'assurer que /init est exécutable
+RUN chmod +x /init
+
+# Utiliser s6-overlay
 CMD ["/init"]
