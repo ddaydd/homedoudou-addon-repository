@@ -401,12 +401,12 @@ app.post('/api/send-command', (req, res) => {
         ...parameters,
     };
 
-    if (send  sendCommandToArduino(ws, commandObj)) {
-    res.status(200).json({ status: 'success', message: 'Commande envoyée' });
-} else {
-    res.status(500).json({ error: 'Erreur lors de l\'envoi de la commande' });
-}
-  });
+    if (sendCommandToArduino(ws, commandObj)) {
+        res.status(200).json({ status: 'success', message: 'Commande envoyée' });
+    } else {
+        res.status(500).json({ error: 'Erreur lors de l\'envoi de la commande' });
+    }
+});
 
 // Endpoint pour lister les appareils connectés
 app.get('/api/devices', (req, res) => {

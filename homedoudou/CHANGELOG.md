@@ -39,3 +39,7 @@
 ## 1.1.1
 
 -- ajout d'une page web
+
+## 1.1.2
+
+-- fix
