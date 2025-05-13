@@ -1,6 +1,18 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const hbs = require('hbs');
+const cors = require('cors'); // Pour gérer le CORS
+const app = express();
+
+app.use(express.json());
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.set('view engine', 'hbs');
+app.set('views', './views');
 
 // Log immédiat pour vérifier SUPERVISOR_TOKEN
 console.log('SUPERVISOR_TOKEN au démarrage :', process.env.SUPERVISOR_TOKEN ? '[PRÉSENT]' : '[ABSENT]');
@@ -58,7 +70,6 @@ wss.on('connection', (ws) => {
 
     // Gestion des messages reçus
     ws.on('message', (message) => {
-        console.log('process.env.SUPERVISOR_TOKEN', process.env.SUPERVISOR_TOKEN);
         try {
             const data = JSON.parse(message);
             console.log('Message reçu:', data);
@@ -357,99 +368,81 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Créer un serveur HTTP simple pour exposer une API REST
-const http = require('http');
-const server = http.createServer((req, res) => {
-    // Autoriser les requêtes CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    // Gérer les requêtes OPTIONS pour le CORS
-    if (req.method === 'OPTIONS') {
-        res.writeHead(200);
-        res.end();
-        return;
-    }
 
-    // Endpoint pour envoyer une commande à un appareil
-    if (req.method === 'POST' && req.url === '/api/send-command') {
-        let body = '';
-
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-
-        req.on('end', () => {
-            try {
-                const data = JSON.parse(body);
-                const { device_id, command, parameters } = data;
-
-                if (!device_id || !command) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'device_id et command sont requis' }));
-                    return;
-                }
-
-                const ws = activeConnections.get(device_id);
-                if (!ws) {
-                    res.writeHead(404);
-                    res.end(JSON.stringify({ error: 'Appareil non connecté' }));
-                    return;
-                }
-
-                // Envoyer la commande
-                const commandObj = {
-                    type: 'command',
-                    command: command,
-                    ...parameters
-                };
-
-                if (sendCommandToArduino(ws, commandObj)) {
-                    res.writeHead(200);
-                    res.end(JSON.stringify({ status: 'success', message: 'Commande envoyée' }));
-                } else {
-                    res.writeHead(500);
-                    res.end(JSON.stringify({ error: 'Erreur lors de l\'envoi de la commande' }));
-                }
-            } catch (err) {
-                console.error('Erreur:', err);
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'Requête invalide' }));
-            }
-        });
-    }
-    // Endpoint pour lister les appareils connectés
-    else if (req.method === 'GET' && req.url === '/api/devices') {
-        const devices = Array.from(activeConnections.keys());
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ devices }));
-    }
-    // Endpoint pour créer une entité
-    else if (req.method === 'POST' && req.url === '/api/create-entity') {
-        createSensorEntity('temperature', 'Temperature', 'temperature', '°C');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Entité créée' }));
-    }
-    // Endpoint pour le statut de l'addon
-    else if (req.method === 'GET' && req.url === '/api/status') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            status: 'running',
-            websocket_port: options.websocket_port,
-            connected_devices: activeConnections.size,
-            uptime: process.uptime()
-        }));
-    }
-    else {
-        res.writeHead(404);
-        res.end(JSON.stringify({ error: 'Endpoint non trouvé' }));
-    }
+// Route pour la page d'accueil avec Handlebars
+app.get('/', (req, res) => {
+    const devices = Array.from(activeConnections.keys());
+    res.render('index', {
+        title: 'Page Basque',
+        message: 'Bienvenue sur l\'add-on HomeDoudou !',
+        devices: devices,
+    });
 });
 
-// Démarrer le serveur HTTP sur le port configuré
-server.listen(options.http_port, () => {
-    console.log(`Serveur HTTP démarré sur le port ${options.http_port}`);
+// Migration des endpoints de l'ancien code
+
+// Endpoint pour envoyer une commande à un appareil
+app.post('/api/send-command', (req, res) => {
+    const { device_id, command, parameters } = req.body;
+
+    if (!device_id || !command) {
+        return res.status(400).json({ error: 'device_id et command sont requis' });
+    }
+
+    const ws = activeConnections.get(device_id);
+    if (!ws) {
+        return res.status(404).json({ error: 'Appareil non connecté' });
+    }
+
+    const commandObj = {
+        type: 'command',
+        command: command,
+        ...parameters,
+    };
+
+    if (send  sendCommandToArduino(ws, commandObj)) {
+    res.status(200).json({ status: 'success', message: 'Commande envoyée' });
+} else {
+    res.status(500).json({ error: 'Erreur lors de l\'envoi de la commande' });
+}
+  });
+
+// Endpoint pour lister les appareils connectés
+app.get('/api/devices', (req, res) => {
+    const devices = Array.from(activeConnections.keys());
+    res.status(200).json({ devices });
+});
+
+// Endpoint pour créer une entité
+app.post('/api/create-entity', (req, res) => {
+    createSensorEntity('temperature_test', 'Temperature', 'temperature', '°C');
+    res.status(200).json({ message: 'Entité créée' });
+});
+
+// Endpoint pour le statut de l'add-on
+app.get('/api/status', (req, res) => {
+    res.status(200).json({
+        status: 'running',
+        websocket_port: options.websocket_port,
+        connected_devices: activeConnections.size,
+        uptime: process.uptime(),
+    });
+});
+
+// Endpoint home (ancien endpoint JSON déplacé)
+app.get('/api/home', (req, res) => {
+    res.status(200).json({ message: 'HomeDoudou Addon démarré' });
+});
+
+// Gestion des routes non trouvées
+app.use((req, res) => {
+    res.status(404).json({ error: 'Endpoint non trouvé' });
+});
+
+// Démarrer le serveur
+app.listen(options.http_port, () => {
+    console.log(`Serveur démarré sur le port ${options.http_port}`);
 });
 
 // Démarrer l'addon

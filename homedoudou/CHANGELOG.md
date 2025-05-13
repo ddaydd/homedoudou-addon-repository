@@ -35,3 +35,7 @@
 ## 1.1.0
 
 -- fix SUPERVISOR_TOKEN
+
+## 1.1.1
+
+-- ajout d'une page web
