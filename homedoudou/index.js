@@ -13,7 +13,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.set('view engine', 'hbs');
-app.set('views', './views');
+app.set('views', path.join(__dirname, 'views'));
 
 // Log immédiat pour vérifier SUPERVISOR_TOKEN
 console.log('SUPERVISOR_TOKEN au démarrage :', process.env.SUPERVISOR_TOKEN ? '[PRÉSENT]' : '[ABSENT]');
@@ -375,8 +375,8 @@ wss.on('connection', (ws) => {
 app.get('/', (req, res) => {
     const devices = Array.from(activeConnections.keys());
     res.render('index', {
-        title: 'Page Basque',
-        message: 'Bienvenue sur l\'add-on HomeDoudou !',
+        title: 'HomeDoudou',
+        message: 'Bienvenue !',
         devices: devices,
     });
 });
