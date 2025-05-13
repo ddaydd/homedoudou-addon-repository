@@ -3,23 +3,35 @@ const fs = require('fs');
 const path = require('path');
 
 // Chargement de la configuration
-let options = {};
+let options = {
+    websocket_port: process.env.WS_PORT || 8080,
+    http_port: process.env.HTTP_PORT || 3000,
+    ha_host: process.env.HA_HOST || 'http://localhost:8123'
+};
+
 try {
-    const configPath = path.join('/data', 'options.json');
+    // Créer le dossier data s'il n'existe pas
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir);
+    }
+
+    const configPath = path.join(dataDir, 'options.json');
     if (fs.existsSync(configPath)) {
-        options = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const fileOptions = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        options = { ...options, ...fileOptions };
+    } else {
+        // Créer le fichier options.json avec les valeurs par défaut
+        fs.writeFileSync(configPath, JSON.stringify(options, null, 4));
     }
 } catch (err) {
     console.error('Erreur lors du chargement de la configuration:', err);
 }
 
-// Port pour le serveur WebSocket
-const PORT = options.websocket_port || 8080;
-
 // Création du serveur WebSocket
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocket.Server({ port: options.websocket_port });
 
-console.log(`Serveur WebSocket démarré sur le port ${PORT}`);
+console.log(`Serveur WebSocket démarré sur le port ${options.websocket_port}`);
 
 // Gestion des connexions WebSocket
 wss.on('connection', (ws) => {
@@ -53,26 +65,32 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Fonction pour traiter les données reçues de l'Arduino
-function processArduinoData(data) {
-    // Ici, vous pouvez implémenter la logique pour traiter les données
-    // et les envoyer à Home Assistant via l'API REST ou WebSocket
-
-    // Exemple: si l'Arduino envoie des données de capteur
-    if (data.type === 'sensor' && data.value !== undefined) {
-        console.log(`Valeur du capteur reçue: ${data.sensor_id} = ${data.value}`);
-
-        // TODO: Envoyer les données à Home Assistant
-        // Exemple: updateHomeAssistantEntity(data.sensor_id, data.value);
-    }
-}
-
 // Fonction pour mettre à jour une entité dans Home Assistant
-function updateHomeAssistantEntity(entityId, state) {
+async function updateHomeAssistantEntity(entityId, state, attributes = {}) {
     // Cette fonction sera implémentée pour communiquer avec l'API Home Assistant
     console.log(`Mise à jour de l'entité ${entityId} avec l'état ${state}`);
 
     // TODO: Implémenter la communication avec l'API Home Assistant
+    const url = `${options.ha_host}/api/states/${entityId}`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            state: state,
+            attributes: attributes
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`Entité ${entityId} mise à jour avec succès:`, data);
+    return data;
 }
 
 // Gestion de l'arrêt propre
@@ -91,7 +109,7 @@ process.on('SIGTERM', () => {
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 // Configuration pour l'API Home Assistant
-const HA_HOST = process.env.SUPERVISOR_TOKEN ? 'http://supervisor/core' : 'http://localhost:8123';
+const HA_HOST = process.env.SUPERVISOR_TOKEN ? 'http://supervisor/core' : options.ha_host;
 let HA_TOKEN = '';
 
 // Si l'addon s'exécute dans l'environnement Home Assistant, utiliser le token du superviseur
@@ -417,7 +435,7 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             status: 'running',
-            websocket_port: PORT,
+            websocket_port: options.websocket_port,
             connected_devices: activeConnections.size,
             uptime: process.uptime()
         }));
@@ -428,10 +446,9 @@ const server = http.createServer((req, res) => {
     }
 });
 
-// Démarrer le serveur HTTP sur un port différent
-const HTTP_PORT = options.http_port || 3000;
-server.listen(HTTP_PORT, () => {
-    console.log(`Serveur HTTP démarré sur le port ${HTTP_PORT}`);
+// Démarrer le serveur HTTP sur le port configuré
+server.listen(options.http_port, () => {
+    console.log(`Serveur HTTP démarré sur le port ${options.http_port}`);
 });
 
 // Démarrer l'addon

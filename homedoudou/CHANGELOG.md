@@ -14,3 +14,8 @@
 ## 1.0.2
 
 - corrige l'exposition des ports 8080 et 3000
+
+## 1.0.3
+
+- meilleure configuration
+- debut de gestion des entitées
