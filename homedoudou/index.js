@@ -289,58 +289,24 @@ function sendCommandToArduino(ws, command) {
 
 // Enregistrer les services personnalisés dans Home Assistant
 async function registerHomeAssistantServices() {
-    if (!HA_CONFIG.token) {
-        console.error('Token Home Assistant non configuré, impossible d\'enregistrer les services');
-        return;
-    }
-
+    const url = `${HA_CONFIG.host}/api/services/homedoudou/register`;
+    const data = {
+        service: 'my_service',
+        domain: 'homedoudou',
+        description: 'My custom service'
+    };
+    console.log('Enregistrement service :', { url, data });
     try {
-        // Enregistrer un service pour envoyer des commandes à l'Arduino
-        const serviceData = {
-            domain: 'homedoudou',
-            service: 'send_command',
-            fields: {
-                device_id: {
-                    required: true,
-                    example: 'arduino_1',
-                    selector: {
-                        text: {}
-                    }
-                },
-                command: {
-                    required: true,
-                    example: 'toggle_led',
-                    selector: {
-                        text: {}
-                    }
-                },
-                parameters: {
-                    required: false,
-                    example: '{"pin": 13, "state": true}',
-                    selector: {
-                        object: {}
-                    }
-                }
-            }
-        };
-
-        const url = `${HA_CONFIG.host}/api/services/homedoudou/send_command`;
-        const response = await fetch(url, {
-            method: 'POST',
+        const response = await axios.post(url, data, {
             headers: {
                 'Authorization': `Bearer ${HA_CONFIG.token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(serviceData)
+                'Content-Type': 'application/json'
+            }
         });
-
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-
-        console.log('Service enregistré avec succès dans Home Assistant');
-    } catch (err) {
-        console.error('Erreur lors de l\'enregistrement du service: ', err);
+        console.log('Service enregistré :', response.data);
+    } catch (error) {
+        console.error('Erreur enregistrement service :', error.response ? error.response.data : error.message);
+        throw error;
     }
 }
 
@@ -488,8 +454,3 @@ server.listen(options.http_port, () => {
 
 // Démarrer l'addon
 console.log('HomeDoudou Addon démarré');
-
-// Enregistrer les services Home Assistant
-registerHomeAssistantServices()
-    .then(() => console.log('Initialisation des services Home Assistant terminée'))
-    .catch(err => console.error('Erreur lors de l\'initialisation des services:', err));

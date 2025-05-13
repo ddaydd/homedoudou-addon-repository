@@ -31,3 +31,7 @@
 ## 1.0.6
 
 -- juste un debug
+
+## 1.1.0
+
+-- fix SUPERVISOR_TOKEN
