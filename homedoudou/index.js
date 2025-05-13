@@ -2,6 +2,9 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 
+// Log immédiat pour vérifier SUPERVISOR_TOKEN
+console.log('SUPERVISOR_TOKEN au démarrage :', process.env.SUPERVISOR_TOKEN ? '[PRÉSENT]' : '[ABSENT]');
+
 // Chargement de la configuration
 let options = {
     websocket_port: process.env.WS_PORT || 8080,
@@ -55,6 +58,7 @@ wss.on('connection', (ws) => {
 
     // Gestion des messages reçus
     ws.on('message', (message) => {
+        console.log('process.env.SUPERVISOR_TOKEN', process.env.SUPERVISOR_TOKEN);
         try {
             const data = JSON.parse(message);
             console.log('Message reçu:', data);
