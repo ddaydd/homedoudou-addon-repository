@@ -1,7 +1,7 @@
 {
     "name": "homedoudou-addon",
-    "version": "1.0.0",
-    "description": "Addon pour connecter Arduino à Home Assistant via WebSocket",
+    "version": "2.0.0",
+    "description": "HomeDoudou - Bridge Arduino/Meteor vers Home Assistant avec ecran OLED",
     "main": "index.js",
     "scripts": {
         "start": "node index.js"
@@ -10,8 +10,6 @@
         "cors": "^2.8.5",
         "express": "^5.1.0",
         "hbs": "^4.2.0",
-        "home-assistant-js-websocket": "^8.2.0",
-        "node-fetch": "^3.3.2",
         "ws": "^8.14.2"
     }
 }

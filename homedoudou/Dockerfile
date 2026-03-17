@@ -1,17 +1,17 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
+ARG BUILD_FROM=ghcr.io/home-assistant/aarch64-base:latest
 FROM ${BUILD_FROM}
 
-# Installation de Node.js et dépendances
-RUN apk add --no-cache nodejs npm
+# Node.js + Python pour OLED
+RUN apk add --no-cache nodejs npm python3 py3-pip py3-pillow \
+    && pip3 install --break-system-packages spidev gpiod
 
-# Copie des fichiers de l'application
+# Application Node.js
 WORKDIR /app
-COPY package.json .
-COPY index.js .
-COPY views/ ./views/
-RUN npm install
+COPY package.json package-lock.json* ./
+RUN npm ci --production 2>/dev/null || npm install --production
+COPY . .
 
-# Copy data for add-on
+# Entrypoint
 COPY run.sh /
 RUN chmod a+x /run.sh
 

@@ -1,0 +1,180 @@
+const WebSocket = require('ws');
+
+class DDPBridge {
+    constructor(config, state, haApi) {
+        this.config = config;
+        this.state = state;
+        this.haApi = haApi;
+        this.client = null;
+        this.connected = false;
+        this.methodId = 1;
+        this.aliveCounter = 0;
+        this.reconnectDelay = 5000;
+        this.maxReconnectDelay = 60000;
+        this.reconnectTimer = null;
+    }
+
+    connect() {
+        if (!this.config.ddp.enabled || !this.config.ddp.hardId) {
+            console.log('[DDP] Desactive ou hardId manquant');
+            return;
+        }
+
+        this.state.setDdpStatus('connecting');
+        console.log(`[DDP] Connexion a ${this.config.ddp.endpoint}...`);
+
+        try {
+            this.client = new WebSocket(this.config.ddp.endpoint);
+        } catch (err) {
+            console.error('[DDP] Erreur creation WebSocket:', err.message);
+            this.scheduleReconnect();
+            return;
+        }
+
+        this.client.on('open', () => {
+            console.log('[DDP] Connecte');
+            this.reconnectDelay = 5000;
+            this.send({
+                msg: 'connect',
+                version: '1',
+                support: ['1', 'pre2', 'pre1']
+            });
+        });
+
+        this.client.on('message', (raw) => {
+            try {
+                const data = JSON.parse(raw);
+                this.handleMessage(data);
+            } catch (err) {
+                console.error('[DDP] Erreur parse:', err.message);
+            }
+        });
+
+        this.client.on('close', () => {
+            console.log('[DDP] Deconnecte');
+            this.connected = false;
+            this.state.setDdpStatus('disconnected');
+            this.scheduleReconnect();
+        });
+
+        this.client.on('error', (err) => {
+            console.error('[DDP] Erreur:', err.message);
+        });
+    }
+
+    handleMessage(data) {
+        switch (data.msg) {
+            case 'connected':
+                this.connected = true;
+                this.state.setDdpStatus('connected');
+                console.log(`[DDP] Session ${data.session}`);
+                // Identification aupres de HomeDoudou
+                this.sendToHMD('connexion', 'hard_id', this.config.ddp.hardId);
+                this.sendToHMD('boot', 'version', '2.0.0');
+                break;
+
+            case 'ping':
+                this.send({ msg: 'pong', id: data.id });
+                this.aliveCounter++;
+                // Heartbeat toutes les 10 pings (~5 min)
+                if (this.aliveCounter % 10 === 0) {
+                    this.sendToHMD('archive', 'vivant', '1');
+                }
+                break;
+
+            case 'changed':
+                // Reception d'un changement de donnee depuis Meteor
+                this.handleChanged(data);
+                break;
+
+            case 'result':
+                // Resultat d'un appel de methode
+                if (data.error) {
+                    console.error('[DDP] Erreur methode:', data.error);
+                }
+                break;
+
+            case 'added':
+                // Document ajoute via subscription
+                this.handleAdded(data);
+                break;
+        }
+    }
+
+    handleChanged(data) {
+        // Quand une Key change dans Meteor, on peut mettre a jour HA
+        if (data.collection === 'configCle' && data.fields) {
+            const fields = data.fields;
+            if (fields.lastData && fields.lastData.value !== undefined) {
+                const sensorId = fields.alias || data.id;
+                console.log(`[DDP] Key change: ${sensorId} = ${fields.lastData.value}`);
+                // Mettre a jour dans HA
+                this.haApi.updateEntity(`sensor.hmd_${sensorId}`, fields.lastData.value, {
+                    friendly_name: `HMD ${fields.nom || sensorId}`,
+                    last_update: new Date().toISOString(),
+                    source: 'homedoudou'
+                });
+                this.state.updateSensor(`hmd_${sensorId}`, fields.lastData.value, { source: 'ddp' });
+            }
+        }
+    }
+
+    handleAdded(data) {
+        // Document initial d'une subscription
+        if (data.collection === 'configCle' && data.fields) {
+            const fields = data.fields;
+            const sensorId = fields.alias || data.id;
+            if (fields.lastData && fields.lastData.value !== undefined) {
+                console.log(`[DDP] Key initiale: ${sensorId} = ${fields.lastData.value}`);
+            }
+        }
+    }
+
+    send(json) {
+        if (this.client && this.client.readyState === WebSocket.OPEN) {
+            this.client.send(JSON.stringify(json));
+        }
+    }
+
+    sendToHMD(mode, key, value) {
+        this.send({
+            msg: 'method',
+            id: String(this.methodId++),
+            method: 'ddpToHmd',
+            params: [{ m: mode, k: key, v: value }]
+        });
+    }
+
+    subscribe(name, params = []) {
+        this.send({
+            msg: 'sub',
+            id: String(this.methodId++),
+            name,
+            params
+        });
+    }
+
+    scheduleReconnect() {
+        if (this.reconnectTimer) return;
+        console.log(`[DDP] Reconnexion dans ${this.reconnectDelay / 1000}s...`);
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.connect();
+        }, this.reconnectDelay);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
+    }
+
+    close() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        if (this.client) {
+            this.client.close();
+            this.client = null;
+        }
+        this.connected = false;
+    }
+}
+
+module.exports = DDPBridge;

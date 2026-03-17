@@ -1,31 +1,164 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{title}}</title>
+    <title>{{title}} - Dashboard</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-
-        h1 {
-            color: #333;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 16px; }
+        h1 { font-size: 1.4em; margin-bottom: 12px; color: #fff; }
+        h1 span { font-size: 0.6em; color: #888; font-weight: normal; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+        .card { background: #16213e; border-radius: 8px; padding: 14px; border: 1px solid #0f3460; }
+        .card h2 { font-size: 0.9em; color: #e94560; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; font-weight: 600; }
+        .badge-ok { background: #064e3b; color: #34d399; }
+        .badge-off { background: #4a1515; color: #f87171; }
+        .badge-warn { background: #78350f; color: #fbbf24; }
+        .list { list-style: none; }
+        .list li { padding: 6px 0; border-bottom: 1px solid #0f3460; font-size: 0.9em; display: flex; justify-content: space-between; }
+        .list li:last-child { border: none; }
+        .val { color: #60a5fa; font-weight: 600; }
+        .empty { color: #555; font-style: italic; font-size: 0.85em; }
+        #log { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8em; color: #aaa; }
+        #log div { padding: 2px 0; border-bottom: 1px solid #0a0a1a; }
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .dot-green { background: #34d399; }
+        .dot-red { background: #f87171; }
+        .dot-yellow { background: #fbbf24; }
     </style>
 </head>
-
 <body>
-    <h1>{{title}}</h1>
-    <p>{{message}}</p>
-    <h2>Appareils connectés</h2>
-    <ul>
-        {{#each devices}}
-            <li>{{this}}</li>
-        {{/each}}
-    </ul>
-</body>
+    <h1>{{title}} <span>v{{version}}</span></h1>
+    <div class="grid">
+        <div class="card">
+            <h2>Services</h2>
+            <ul class="list">
+                <li>Home Assistant <span id="ha-status"><span class="dot dot-green"></span><span class="badge badge-ok">connecte</span></span></li>
+                <li>DDP Meteor <span id="ddp-status"></span></li>
+                <li>Ecran OLED <span id="oled-status"></span></li>
+                <li>Uptime <span class="val" id="uptime">-</span></li>
+            </ul>
+        </div>
+        <div class="card">
+            <h2>Appareils Arduino</h2>
+            <ul class="list" id="devices">
+                <li class="empty">Aucun appareil connecte</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h2>Capteurs</h2>
+            <ul class="list" id="sensors">
+                <li class="empty">Aucun capteur</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h2>Journal</h2>
+            <div id="log"></div>
+        </div>
+    </div>
 
+    <script>
+        const $ = (s) => document.querySelector(s);
+
+        function badge(status) {
+            const map = {
+                connected: '<span class="dot dot-green"></span><span class="badge badge-ok">connecte</span>',
+                connecting: '<span class="dot dot-yellow"></span><span class="badge badge-warn">connexion...</span>',
+                disconnected: '<span class="dot dot-red"></span><span class="badge badge-off">deconnecte</span>',
+                running: '<span class="dot dot-green"></span><span class="badge badge-ok">actif</span>',
+                disabled: '<span class="badge badge-off">desactive</span>',
+                error: '<span class="dot dot-red"></span><span class="badge badge-off">erreur</span>',
+            };
+            return map[status] || `<span class="badge badge-off">${status}</span>`;
+        }
+
+        function formatUptime(secs) {
+            const d = Math.floor(secs / 86400);
+            const h = Math.floor((secs % 86400) / 3600);
+            const m = Math.floor((secs % 3600) / 60);
+            return d > 0 ? `${d}j ${h}h${String(m).padStart(2,'0')}` : `${h}h${String(m).padStart(2,'0')}`;
+        }
+
+        function renderDevices(devices) {
+            const el = $('#devices');
+            if (!devices || devices.length === 0) {
+                el.innerHTML = '<li class="empty">Aucun appareil connecte</li>';
+                return;
+            }
+            el.innerHTML = devices.map(d => `<li><span class="dot dot-green"></span>${d}</li>`).join('');
+        }
+
+        function renderSensors(sensors) {
+            const el = $('#sensors');
+            const entries = Object.entries(sensors || {});
+            if (entries.length === 0) {
+                el.innerHTML = '<li class="empty">Aucun capteur</li>';
+                return;
+            }
+            el.innerHTML = entries.map(([id, data]) =>
+                `<li>${id} <span class="val">${data.value}</span></li>`
+            ).join('');
+        }
+
+        function addLog(msg) {
+            const el = $('#log');
+            const t = new Date().toLocaleTimeString('fr-FR');
+            const div = document.createElement('div');
+            div.textContent = `[${t}] ${msg}`;
+            el.prepend(div);
+            while (el.children.length > 50) el.lastChild.remove();
+        }
+
+        function updateAll(data) {
+            if (data.ddp !== undefined) $('#ddp-status').innerHTML = badge(data.ddp);
+            if (data.oled !== undefined) $('#oled-status').innerHTML = badge(data.oled);
+            if (data.uptime !== undefined) $('#uptime').textContent = formatUptime(data.uptime);
+            if (data.devices) renderDevices(data.devices);
+            if (data.sensors) renderSensors(data.sensors);
+        }
+
+        // WebSocket temps reel
+        let ws;
+        function connectWs() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}/ws`);
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'init') {
+                    updateAll(data);
+                    addLog('Connecte au dashboard');
+                } else if (data.type === 'sensor_update') {
+                    addLog(`Capteur ${data.sensorId} = ${data.value}`);
+                    // Refresh via API
+                    fetch('/api/status').then(r => r.json()).then(updateAll);
+                } else if (data.type === 'device_add') {
+                    addLog(`Appareil connecte: ${data.deviceId}`);
+                    fetch('/api/status').then(r => r.json()).then(updateAll);
+                } else if (data.type === 'device_remove') {
+                    addLog(`Appareil deconnecte: ${data.deviceId}`);
+                    fetch('/api/status').then(r => r.json()).then(updateAll);
+                } else if (data.type === 'ddp_status') {
+                    $('#ddp-status').innerHTML = badge(data.status);
+                    addLog(`DDP: ${data.status}`);
+                } else if (data.type === 'oled_status') {
+                    $('#oled-status').innerHTML = badge(data.status);
+                }
+            };
+            ws.onclose = () => {
+                addLog('Deconnecte, reconnexion...');
+                setTimeout(connectWs, 3000);
+            };
+        }
+        connectWs();
+
+        // Refresh uptime periodique
+        setInterval(() => {
+            fetch('/api/status').then(r => r.json()).then(d => {
+                if (d.uptime) $('#uptime').textContent = formatUptime(d.uptime);
+            }).catch(() => {});
+        }, 10000);
+    </script>
+</body>
 </html>
