@@ -103,16 +103,22 @@ class DDPBridge {
         }
     }
 
+    // Normalise un ID pour HA : minuscules, sans accents, espaces/special -> underscore
+    sanitizeId(str) {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    }
+
     handleChanged(data) {
         // Quand une Key change dans Meteor, on peut mettre a jour HA
         if (data.collection === 'configCle' && data.fields) {
             const fields = data.fields;
             if (fields.lastData && fields.lastData.value !== undefined) {
-                const sensorId = fields.alias || data.id;
-                console.log(`[DDP] Key change: ${sensorId} = ${fields.lastData.value}`);
-                // Mettre a jour dans HA
+                const rawId = fields.alias || data.id;
+                const sensorId = this.sanitizeId(rawId);
+                console.log(`[DDP] Key change: ${rawId} = ${fields.lastData.value}`);
                 this.haApi.updateEntity(`sensor.hmd_${sensorId}`, fields.lastData.value, {
-                    friendly_name: `HMD ${fields.nom || sensorId}`,
+                    friendly_name: `HMD ${fields.nom || rawId}`,
                     last_update: new Date().toISOString(),
                     source: 'homedoudou'
                 });
@@ -126,10 +132,10 @@ class DDPBridge {
         if (data.collection === 'configCle' && data.fields) {
             const fields = data.fields;
             const keyName = fields.name || data.id;
-            const sensorId = fields.alias || keyName;
+            const rawId = fields.alias || keyName;
+            const sensorId = this.sanitizeId(rawId);
             const value = fields.lastData?.value;
-            console.log(`[DDP] Key initiale: ${sensorId} (${keyName}) = ${value}`);
-            // Stocker dans le state
+            console.log(`[DDP] Key initiale: ${rawId} (${keyName}) = ${value}`);
             this.state.updateSensor(`hmd_${sensorId}`, value !== undefined ? value : 'unknown', {
                 source: 'ddp',
                 keyName,
@@ -138,10 +144,9 @@ class DDPBridge {
                 show: fields.show,
                 public: fields.public
             });
-            // Creer/mettre a jour l'entite HA
             if (value !== undefined) {
                 this.haApi.updateEntity(`sensor.hmd_${sensorId}`, value, {
-                    friendly_name: `HMD ${fields.nom || sensorId}`,
+                    friendly_name: `HMD ${fields.nom || rawId}`,
                     last_update: fields.lastData?.date || new Date().toISOString(),
                     source: 'homedoudou',
                     key_name: keyName
