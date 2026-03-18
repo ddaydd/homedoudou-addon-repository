@@ -71,6 +71,8 @@ class DDPBridge {
                 // Identification aupres de HomeDoudou
                 this.sendToHMD('connexion', 'hard_id', this.config.ddp.hardId);
                 this.sendToHMD('boot', 'version', '2.0.0');
+                // Souscrire aux keys du hardware apres identification
+                this.subscribe('hardwareKeys');
                 break;
 
             case 'ping':
@@ -123,9 +125,27 @@ class DDPBridge {
         // Document initial d'une subscription
         if (data.collection === 'configCle' && data.fields) {
             const fields = data.fields;
-            const sensorId = fields.alias || data.id;
-            if (fields.lastData && fields.lastData.value !== undefined) {
-                console.log(`[DDP] Key initiale: ${sensorId} = ${fields.lastData.value}`);
+            const keyName = fields.name || data.id;
+            const sensorId = fields.alias || keyName;
+            const value = fields.lastData?.value;
+            console.log(`[DDP] Key initiale: ${sensorId} (${keyName}) = ${value}`);
+            // Stocker dans le state
+            this.state.updateSensor(`hmd_${sensorId}`, value !== undefined ? value : 'unknown', {
+                source: 'ddp',
+                keyName,
+                keyId: data.id,
+                nom: fields.nom || keyName,
+                show: fields.show,
+                public: fields.public
+            });
+            // Creer/mettre a jour l'entite HA
+            if (value !== undefined) {
+                this.haApi.updateEntity(`sensor.hmd_${sensorId}`, value, {
+                    friendly_name: `HMD ${fields.nom || sensorId}`,
+                    last_update: fields.lastData?.date || new Date().toISOString(),
+                    source: 'homedoudou',
+                    key_name: keyName
+                });
             }
         }
     }
